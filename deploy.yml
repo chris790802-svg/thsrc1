@@ -1,0 +1,40 @@
+name: Update THSR data and deploy
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # 每 10 分鐘更新一次（GitHub 排程可能延遲數分鐘）
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch TDX data
+        env:
+          TDX_CLIENT_ID: ${{ secrets.TDX_CLIENT_ID }}
+          TDX_CLIENT_SECRET: ${{ secrets.TDX_CLIENT_SECRET }}
+          FREE_SEAT_PATH: ${{ vars.FREE_SEAT_PATH }}
+        run: |
+          mkdir -p _site/data
+          cp index.html _site/
+          node scripts/fetch-tdx.mjs _site/data
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

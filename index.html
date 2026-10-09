@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>高鐵列車即時位置與發車資訊</title>
+<style>
+:root{--bg:#f4f5f7;--fg:#14202e;--mut:#667085;--line:#cfd5de;--card:#fff;--south:#12945a;--north:#1f6feb;--ok:#1a9a5b;--warn:#d98a00;--bad:#d1342f}
+@media(prefers-color-scheme:dark){:root{--bg:#10161e;--fg:#eaeef4;--mut:#98a2b3;--line:#334155;--card:#1a232e;--south:#2fa36b;--north:#5b9bff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;overflow-x:hidden}
+header{padding:16px 16px 8px;max-width:680px;margin:auto}
+h1{font-size:20px;margin:0 0 4px;font-weight:700}
+.sub{color:var(--mut);font-size:13px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{padding:1px 8px;border-radius:99px;border:1px solid var(--line);font-size:12px}
+.badge.live{color:var(--ok);border-color:var(--ok)}.badge.demo{color:var(--warn);border-color:var(--warn)}
+.tabs{display:flex;gap:6px;margin:10px 0 0}
+.tabs button{flex:1;padding:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;font:inherit;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+
+.legend{display:grid;grid-template-columns:1fr 90px 1fr;max-width:680px;margin:16px auto 0;padding:0 16px;font-size:13px;font-weight:700}
+.legend span:first-child{color:var(--north);text-align:left}.legend span:last-child{color:var(--south);text-align:right}
+#track{position:relative;max-width:680px;margin:0 auto;padding:0 16px 120px;display:grid;grid-template-columns:1fr 90px 1fr}
+#track::before{content:"";position:absolute;left:50%;top:calc(var(--row)/2);bottom:calc(120px + var(--row)/2);width:6px;margin-left:-3px;background:var(--line);border-radius:3px}
+.lane{position:relative}
+.st{height:var(--row);display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.sb{background:var(--bg);color:var(--fg);border:2px solid var(--fg);border-radius:99px;padding:3px 10px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.sb:focus-visible,#back:focus-visible,.rowb:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.st.has .sb{background:var(--fg);color:var(--bg)}
+.tr{position:absolute;width:64px;padding:2px 4px;border:0;border-radius:10px;color:#fff;font:inherit;text-align:center;line-height:1.2;cursor:pointer;transform:translateY(-50%);box-shadow:0 1px 4px #0004;z-index:2}
+.tr.s{background:var(--south)}.tr.n{background:var(--north)}
+.tr strong{display:block;font-size:14px}.tr small{font-size:11px;opacity:.95;white-space:nowrap}
+.tr:focus-visible,.tabs button:focus-visible,#close:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.empty{grid-column:1/-1;text-align:center;color:var(--mut);padding:24px}
+#sheet{position:fixed;left:0;right:0;bottom:0;max-height:78vh;overflow:auto;background:var(--card);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px #0004;transform:translateY(105%);transition:transform .25s;z-index:5;padding-bottom:env(safe-area-inset-bottom,0)}
+#sheet.open{transform:none}
+.in{max-width:680px;margin:auto;padding:16px}
+.hd{display:flex;justify-content:space-between;align-items:start;gap:8px}
+.hd h2{margin:0;font-size:18px}.hd p{margin:2px 0 0;color:var(--mut);font-size:13px}
+#close{border:0;background:var(--bg);color:var(--fg);border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer}
+h3{font-size:14px;margin:16px 0 6px}
+.stops{list-style:none;margin:0;padding:0}
+.stops li{display:grid;grid-template-columns:16px 1fr auto;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:center}
+.stops i{width:10px;height:10px;border-radius:50%;background:var(--line);display:block}
+.stops li.cur i{background:var(--ok);box-shadow:0 0 0 4px #1a9a5b33}.stops li.next i{background:var(--fg)}
+.stops li.past{color:var(--mut)}.stops li.past .t{text-decoration:line-through}
+.t{font-variant-numeric:tabular-nums;font-size:14px;text-align:right}.t small{color:var(--mut);display:block;font-size:11px}
+.cars{display:grid;gap:8px}
+.car{display:grid;grid-template-columns:64px 1fr 56px;gap:10px;align-items:center;font-size:14px}
+.bar{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}.bar div{height:100%}
+.note{color:var(--mut);font-size:12px;margin-top:8px}
+.platform-tag{display:inline-block;background:var(--bg);border:1px solid var(--line);color:var(--fg);font-size:11px;padding:1px 5px;border-radius:4px;margin-left:4px}
+.ar{font-style:normal;font-size:.72em;margin-right:3px;vertical-align:1px}
+.ar.s{color:var(--south)}.ar.n{color:var(--north)}
+.tr .ar{color:#fff}
+.search{display:flex;gap:6px;margin-top:10px}
+.search input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+.search button{padding:8px 14px;border:0;border-radius:8px;background:var(--fg);color:var(--bg);font:inherit;cursor:pointer}
+.search input:focus-visible,.search button:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+#qmsg{color:var(--bad);font-size:12px}
+.status{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:14px;font-weight:600}
+.stat{display:inline-flex;align-items:center;gap:6px}
+.stat .ring{width:14px;height:14px;border:3px solid currentColor;border-radius:50%;display:inline-block}
+.stat.ok{color:var(--ok)}.stat.warn{color:var(--warn)}.stat.unk{color:var(--mut)}
+.sec{margin:16px 0 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.rowb{display:grid;grid-template-columns:76px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:var(--fg);font:inherit;padding:9px 0;cursor:pointer}
+.rowb .t small{display:block}
+.rowb.end{color:var(--mut)}
+.none{color:var(--mut);font-size:13px;padding:6px 0}
+#back{border:0;background:none;color:var(--mut);font:inherit;cursor:pointer;padding:0 0 6px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:4px 12px;border-radius:99px;border:1.5px solid var(--ok);color:var(--ok);font-weight:600;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>高鐵列車即時位置</h1>
+  <div class="sub"><span id="clock"></span><span id="src" class="badge">載入中…</span><span id="cnt"></span></div>
+  <div class="status" aria-live="polite">
+    <span class="stat unk" id="ops"><i class="ring"></i><span>營運狀態確認中…</span></span>
+    <span class="stat ok" id="crowd"><i class="ring"></i><span>無人潮管制資訊</span></span>
+  </div>
+  <div class="tabs" role="group" aria-label="方向">
+    <button data-f="all" aria-pressed="true">全部</button>
+    <button data-f="1" aria-pressed="false">北上</button>
+    <button data-f="0" aria-pressed="false">南下</button>
+  </div>
+  <form class="search" id="sf" role="search">
+    <input id="q" type="search" inputmode="numeric" placeholder="搜尋今日車次（例：123）" aria-label="搜尋車次">
+    <button type="submit">查詢</button>
+  </form>
+  <div id="qmsg" role="status"></div>
+</header>
+
+
+<div class="legend"><span>↑ 北上</span><span></span><span>南下 ↓</span></div>
+<main id="track" aria-live="polite"></main>
+<section id="sheet" role="dialog" aria-modal="true" aria-label="列車詳細資訊"><div class="in" id="sheetIn"></div></section>
+
+<script>
+const ST=[['0990','南港'],['1000','台北'],['1010','板橋'],['1020','桃園'],['1030','新竹'],['1035','苗栗'],['1040','台中'],['1043','彰化'],['1047','雲林'],['1050','嘉義'],['1060','台南'],['1070','左營']];
+const IDX=Object.fromEntries(ST.map((s,i)=>[s[0],i]));
+const dirArrow=d=>`<i class="ar ${d?'n':'s'}" aria-hidden="true">${d?'▲':'▼'}</i>`;
+const FREE_CARS=[10,11,12]; // 備援假設值：TDX 沒資料時才使用
+const freeMap=new Map(); let freeOk=false;
+const ROW=104, $=s=>document.querySelector(s);
+let trains=[], filter='all', selNo=null;
+document.documentElement.style.setProperty('--row',ROW+'px');
+
+const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
+const fmt=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');
+const nowMin=()=>{const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));return d.getHours()*60+d.getMinutes()+d.getSeconds()/60};
+
+
+const J=async f=>{const r=await fetch('data/'+f+'?t='+Date.now());if(!r.ok)throw new Error(f+' '+r.status);return r.json()};
+const todayStr=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'});
+async function load(){ // 資料由 GitHub Actions 定時從 TDX 抓好放在 data/，網頁不接觸金鑰
+  try{const tt=await J('timetable.json');trains=tt.trains;setSrc(true,tt.date)}
+  catch(e){console.warn(e);if(!trains.length){trains=mock();setSrc(false)}}
+  try{const f=await J('free.json');freeMap.clear();Object.entries(f.cars||{}).forEach(([k,v])=>freeMap.set(String(parseInt(k,10)),v));freeOk=freeMap.size>0}catch(e){}
+  try{const a=await J('alert.json'),age=(Date.now()-Date.parse(a.updated))/60000;
+    if(isNaN(age)||age>90||a.status==='unk')setOps('unk','營運狀態未確認');else setOps(a.status,a.text)}
+  catch(e){setOps('unk','營運狀態未確認')}
+  if($('#sheet').classList.contains('open'))drawSheet();
+}
+
+function setOps(kind,text){const e=$('#ops');e.className='stat '+kind;e.lastElementChild.textContent=text}
+function freeHtml(t){
+  const real=freeMap.get(String(parseInt(t.no,10)));
+  if(real) return `<div class="chips">${real.map(c=>`<span class="chip">${c} 號車廂</span>`).join('')}</div>
+    <p class="note">資料來源：TDX 自由座車廂資料；實際開放車廂以月台公告為準。</p>`;
+  const bars=freeCars(t).map(c=>`<div class="car"><b>${c.c} 號車廂</b><div class="bar"><div style="width:${c.pct}%;background:${c.col}"></div></div><span>${c.txt}</span></div>`).join('');
+  return `<div class="cars">${bars}</div><p class="note">${freeOk?'TDX 資料中找不到本班車':'尚未取得 TDX 自由座資料'}，以上車廂與擁擠度為假設值，請以高鐵官方與站內公告為準。</p>`;
+}
+function setSrc(ok,date){const b=$('#src'),same=date===todayStr();
+  b.textContent=ok?'TDX 時刻表 '+date.slice(5)+(same?'':'（非今日）'):'示範資料（讀不到 data/timetable.json）';
+  b.className='badge '+(ok&&same?'live':'demo')}
+function mock(){
+  const cum=[0,9,19,29,44,57,71,81,91,106,124,138],skip=[[],[2,5,8],[2,3,5,8,9]],out=[];
+  for(let k=0;k<70;k++)for(const dir of[0,1]){
+    const start=330+k*14+(dir?7:0),sk=skip[k%3],idx=ST.map((_,i)=>i).filter(i=>i===0||i===11||!sk.includes(i));
+    if(dir)idx.reverse();
+    const stops=idx.map(i=>{
+      const m=dir?start+138-cum[i]:start+cum[i];const first=i===idx[0],last=i===idx[idx.length-1];
+      return{i,name:ST[i][1],arr:m,dep:m+(first||last?0:1),platform: dir===0?'第 2 月台':'第 1 月台'}
+    });
+    out.push({no:String((k%9+1)*100+Math.floor(k/9)*2+(dir?0:1)),dir,stops});
+  }return out;
+}
+
+function locate(t,now){
+  const s=t.stops;
+  for(let k=0;k<s.length;k++){
+    if(now>=s[k].arr&&now<=s[k].dep) return{at:s[k].i,f:s[k].i,k};
+    if(k<s.length-1&&now>s[k].dep&&now<s[k+1].arr){
+      const p=(now-s[k].dep)/(s[k+1].arr-s[k].dep),f=s[k].i+(s[k+1].i-s[k].i)*p;
+      return{f,k,next:k+1};
+    }
+  }return null;
+}
+function segLabel(t,p){
+  if(p.at!==undefined) return '停靠 '+ST[p.at][1];
+  const lo=Math.min(Math.floor(p.f),10),hi=lo+1;
+  return t.dir===0?ST[lo][1]+'→'+ST[hi][1]:ST[hi][1]+'→'+ST[lo][1];
+}
+
+function freeCars(t){
+  const nums=FREE_CARS,h=parseInt(t.no,10)||1;
+  return nums.map((c,i)=>{const pct=(h*(c+7)*37+i*19)%66+25;
+    return{c,pct,txt:pct<50?'空位多':pct<75?'尚有座位':'擁擠',col:pct<50?'var(--ok)':pct<75?'var(--warn)':'var(--bad)'}});
+}
+
+// 渲染南港、台中、左營未來 2 小時發車清單
+function buildTrack(){
+  $('#track').innerHTML='<div class="lane" id="ln"></div><div id="mid"></div><div class="lane" id="ls"></div>';
+  $('#mid').innerHTML=ST.map(x=>`<div class="st"><button class="sb" data-i="${ST.indexOf(x)}" aria-label="${x[1]}站 未來兩小時車次">${x[1]}</button></div>`).join('');
+  document.querySelectorAll('.sb').forEach(b=>b.onclick=()=>openStation(+b.dataset.i));
+}
+
+let sheetMode='train', selSt=0, fromSt=null;
+function openTrain(trainNo,from=null){
+  selNo=trainNo; sheetMode='train'; fromSt=from;
+  drawSheet(); $('#sheet').classList.add('open');
+}
+function openStation(i){
+  selSt=i; sheetMode='station'; fromSt=null;
+  drawSheet(); $('#sheet').classList.add('open');
+}
+function drawSheet(){ sheetMode==='station'?drawStation():drawTrain(); }
+function drawStation(){
+  const i=selSt, now=nowMin(), items=[];
+  trains.forEach(t=>{
+    const k=t.stops.findIndex(x=>x.i===i); if(k<0)return;
+    const s=t.stops[k], isEnd=k===t.stops.length-1, tm=isEnd?s.arr:s.dep;
+    if(tm>=now&&tm<=now+120) items.push({t,s,isEnd,tm,end:t.stops[t.stops.length-1].name});
+  });
+  const sec=dir=>{
+    const list=items.filter(x=>x.t.dir===dir).sort((a,b)=>a.tm-b.tm);
+    return`<div class="sec">${dirArrow(dir)}${dir?'北上':'南下'}<span class="badge">${list.length} 班</span></div>`+
+      (list.length?list.map(x=>`<button class="rowb${x.isEnd?' end':''}" onclick="openTrain('${x.t.no}',${i})">
+        <b>${dirArrow(dir)}${x.t.no} 次</b>
+        <span>${x.isEnd?'本站為終點':'往 '+x.end}${x.s.platform?`<span class="platform-tag">${x.s.platform}</span>`:''}</span>
+        <span class="t">${fmt(x.tm)}<small>${x.isEnd?'到站':'發車'}</small></span></button>`).join('')
+        :'<div class="none">兩小時內沒有班次</div>');
+  };
+  $('#sheetIn').innerHTML=`<div class="hd"><div><h2>${ST[i][1]}站</h2><p>現在 ${fmt(now)} 起兩小時內的車次</p></div>
+    <button id="close" aria-label="關閉">✕</button></div>`+sec(1)+sec(0);
+  $('#close').onclick=()=>$('#sheet').classList.remove('open');
+}
+
+function render(){
+  const now=nowMin();
+  $('#clock').textContent='現在 '+fmt(now);
+  const allLive=trains.map(t=>({t,p:locate(t,now)})).filter(x=>x.p);
+  const live = allLive.filter(x => filter === 'all' || String(x.t.dir) === filter);
+  
+  $('#cnt').textContent='行駛中 '+allLive.length+' 班';
+  document.querySelectorAll('.st').forEach(e=>e.classList.remove('has'));
+  
+  const lanes={0:$('#ls'),1:$('#ln')};
+  lanes[0].innerHTML=lanes[1].innerHTML='';
+
+  const targetDirs = filter === 'all' ? [0, 1] : [parseInt(filter, 10)];
+  const stEls=document.querySelectorAll('.st'), STEP=68, H=38;
+
+  targetDirs.forEach(dir => {
+    const lane=lanes[dir], perRow=Math.max(1,Math.floor((lane.clientWidth+4)/STEP));
+    const groups=new Map();
+    allLive.filter(x=>x.t.dir===dir).forEach(x=>{
+      const at=x.p.at!==undefined, lo=Math.min(Math.floor(x.p.f),10);
+      if(at) stEls[x.p.at].classList.add('has');
+      const key=at?'a'+x.p.at:'b'+lo, y=at?(x.p.at+0.5)*ROW:(lo+1)*ROW;
+      if(!groups.has(key)) groups.set(key,{y,list:[]});
+      groups.get(key).list.push(x);
+    });
+    groups.forEach(({y,list})=>{
+      list.sort((a,b)=>(parseInt(a.t.no,10)||0)-(parseInt(b.t.no,10)||0));
+      const rows=Math.ceil(list.length/perRow);
+      list.forEach(({t,p},j)=>{
+        const r=Math.floor(j/perRow), c=j%perRow;
+        const b=document.createElement('button');
+        b.className='tr '+(t.dir?'n':'s');
+        b.style.top=(y+(r-(rows-1)/2)*H)+'px';
+        b.style[t.dir?'right':'left']=(c*STEP)+'px';
+        b.innerHTML=`<strong>${dirArrow(t.dir)}${t.no}</strong><small>${segLabel(t,p)}</small>`;
+        b.setAttribute('aria-label',`${t.no}次 ${t.dir?'北上':'南下'} ${segLabel(t,p)}`);
+        b.onclick=()=>openTrain(t.no);
+        lane.appendChild(b);
+      });
+    });
+  });
+
+  const wrap=$('#track');
+  lanes[0].style.height=lanes[1].style.height=ST.length*ROW+'px';
+  
+  if(!live.length && !$('.empty')) {
+    wrap.insertAdjacentHTML('beforeend','<div class="empty">目前沒有符合條件的行駛中班次</div>');
+  } else if(live.length) {
+    document.querySelector('.empty')?.remove();
+  }
+  
+  if($('#sheet').classList.contains('open')) drawSheet();
+}
+
+function drawTrain(){
+  const t=trains.find(x=>x.no===selNo); if(!t)return;
+  const now=nowMin(),p=locate(t,now),first=t.stops[0],last=t.stops[t.stops.length-1];
+  const cur=p?p.k:-1,atStn=p&&p.at!==undefined;
+  const rows=t.stops.map((s,k)=>{
+    const cls=!p?'':atStn&&k===cur?'cur':!atStn&&k===p.next?'next':k<(atStn?cur:p.next)?'past':'';
+    const first=k===0,last=k===t.stops.length-1;
+    return`<li class="${cls}"><i></i><span>${s.name}${cls==='cur'?'（停靠中）':cls==='next'?'（下一站）':''}${s.platform?`<span class="platform-tag">${s.platform}</span>`:''}</span>
+      <span class="t">${last?'終點 '+fmt(s.arr):fmt(s.dep)}<small>${first?'起站發車':last?'到達':'到 '+fmt(s.arr)+' ／ 發'}</small></span></li>`}).join('');
+  $('#sheetIn').innerHTML=`${fromSt!==null?'<button id="back">‹ 返回'+ST[fromSt][1]+'站</button>':''}<div class="hd"><div><h2>${dirArrow(t.dir)}${t.no} 次 ${t.dir?'北上':'南下'}</h2>
+    <p>${first.name} ${fmt(first.dep)} → ${last.name} ${fmt(last.arr)} ${p?'目前：'+segLabel(t,p):(now<first.dep?'尚未發車':'已抵達終點')}</p></div>
+    <button id="close" aria-label="關閉">✕</button></div>
+    <h3>停靠站與發車時間</h3><ul class="stops">${rows}</ul>
+    <h3>自由座車廂</h3>${freeHtml(t)}`;
+  $('#close').onclick=()=>$('#sheet').classList.remove('open');
+  if(fromSt!==null)$('#back').onclick=()=>openStation(fromSt);
+}
+
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  filter=b.dataset.f;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+$('#sf').onsubmit=e=>{
+  e.preventDefault();
+  const n=parseInt($('#q').value.trim(),10),msg=$('#qmsg');
+  if(isNaN(n)){msg.textContent='請輸入數字車次';return}
+  const t=trains.find(x=>parseInt(x.no,10)===n);
+  if(!t){msg.textContent='今日沒有 '+n+' 次車';return}
+  msg.textContent='';openTrain(t.no);
+};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#sheet').classList.remove('open')});
+
+window.addEventListener('resize',()=>{if(trains.length)render()});
+buildTrack();
+load().then(()=>{render();setInterval(render,15000);setInterval(load,300000)});
+</script>
+</body>
+</html>
