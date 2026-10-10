@@ -169,7 +169,7 @@ const LAY=[I3,I2,I2,SD,SD,SD,TC,SD,SD,SD,SD,I3];
 const ICON=new Set([0,11]);          // 用 700T 小圖示意停靠的站：南港、左營
 const TERM_BEFORE=10, TERM_AFTER=10; // 假設值：起站發車前 10 分鐘進月台、終點站到達後 10 分鐘仍停在月台
 const COL=32;                        // 每條股道/月台的欄寬（月台間隔）；車次標籤寬 28，相鄰軌不會互相遮住
-const WW=390, CX=78+(WW-78)/2, MX=13, ZT=28, ZB=28, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
+const WW=390, CX=78+(WW-78)/2, MX=COL/2, ZT=28, ZB=28, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
 const G=[]; let y0=ZT;
 LAY.forEach((p,i)=>{
   const W=p.length*COL, x0=CX-W/2, tk=[], pl=[];
@@ -476,8 +476,23 @@ function render(){
     });
   });
   want.forEach((set,key)=>[...set].forEach(no=>claimSlot(key,no))); // 即將進站者預訂（停靠中的已先占位）
-  moving.forEach(({t,p})=>{ // 行駛中：沿主線與連接線，進出站對準自己的軌
-    const a=t.stops[p.k].i, b=t.stops[p.next].i, y=yAt(p.f);
+  // 行駛中：沿主線與連接線，進出站對準自己的軌；同方向靠太近的車沿軌道上下錯開，車號不會互相蓋住
+  const mv=moving.map(({t,p})=>({t,p,y:yAt(p.f)})), MING=18;
+  [0,1].forEach(d=>{
+    const L=mv.filter(r=>r.t.dir===d).sort((a,b)=>a.y-b.y);
+    for(let pass=0;pass<6;pass++){
+      let moved=false;
+      for(let i=0;i<L.length;){
+        let j=i; while(j+1<L.length&&L[j+1].y-L[j].y<MING-.01)j++;
+        if(j>i){const n=j-i+1,mean=L.slice(i,j+1).reduce((s,r)=>s+r.y,0)/n;
+          for(let k=0;k<n;k++)L[i+k].y=mean+(k-(n-1)/2)*MING; moved=true}
+        i=j+1;
+      }
+      if(!moved)break;
+    }
+  });
+  mv.forEach(({t,p,y})=>{
+    const a=t.stops[p.k].i, b=t.stops[p.next].i;
     const depX=trackOf(a,t.dir,t.no), arrX=trackOf(b,t.dir,t.no);
     put(t,p,{x:pathX(y,t.dir,j=>j===a?depX:j===b?arrX:throughX(j,t.dir)),y});
   });
