@@ -47,7 +47,6 @@ main{width:100%;max-width:480px}
 .pl{position:absolute;width:18px;margin-left:-9px;border-radius:3px;background:var(--plat);border:1px solid var(--platb)}
 .pl.hot{background:var(--orgl);border:2px solid var(--org)}
 .sn{all:unset;box-sizing:border-box;display:block;cursor:pointer;position:absolute;left:0;width:78px;text-align:right;margin-top:-14px;font-weight:700;font-size:.95rem;line-height:18px}
-.sn small{display:block;color:var(--mute);font-weight:400;font-size:.62rem;line-height:1.2}
 .sn.has{color:var(--org)}
 .sn:focus-visible{outline:2px solid var(--org);outline-offset:2px;border-radius:4px}
 #fleet{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
@@ -165,7 +164,6 @@ let trains=[], filter='all', selNo=null;
 /* ── 版面設定：各站股道/月台排列（T=股道 P=月台 M=通過線），可自行調整 ── */
 const I3="TPTTPTTPT",I2="TPTTPT",TC="TPTMMTPT",SD="PTMMTP";
 const LAY=[I3,I2,I2,SD,SD,SD,TC,SD,SD,SD,SD,I3];
-const DESC=["3 島 6 股","2 島 4 股","2 島 4 股","側式+通過線","側式+通過線","側式+通過線","2 島+通過線","側式+通過線","側式+通過線","側式+通過線","側式+通過線","3 島 6 股"];
 const ICON=new Set([0,11]);          // 用 700T 小圖示意停靠的站：南港、左營
 const TERM_BEFORE=10, TERM_AFTER=10; // 假設值：起站發車前 10 分鐘進月台、終點站到達後 10 分鐘仍停在月台
 const COL=26;                        // 每條股道/月台的欄寬（月台間隔）
@@ -179,11 +177,25 @@ LAY.forEach((p,i)=>{
   y0+=H+GAP;
 });
 const MAPH=y0-GAP+ZB;
+const CONN=56;                                  // 站外連接線長度（站間灰線 ↔ 月台軌）
+const ss=s=>s*s*(3-2*s);                        // 連接線的緩和曲線（列車沿同一條曲線行進）
+const lastTrack=new Map();                      // 車次→最近停靠的股道（離站時沿原軌駛出）
 const stopTracks=(i,d)=>G[i].half[d].filter(t=>!t.m).sort((a,b)=>Math.abs(a.x-CX)-Math.abs(b.x-CX));
 function throughX(i,d){const hf=G[i].half[d],mm=hf.filter(t=>t.m);return mm.length?mm[0].x:hf.reduce((a,t)=>Math.abs(t.x-CX)<Math.abs(a.x-CX)?t:a).x}
 const nearPl=(i,x)=>{let b=0,bd=1e9;G[i].pl.forEach((q,j)=>{const dd=Math.abs(q-x);if(dd<bd){bd=dd;b=j}});return b};
 const yAt=f=>{const i=Math.min(10,Math.floor(f)),r=f-i;return G[i].yc+(G[i+1].yc-G[i].yc)*r};
-const inBox=y=>G.findIndex(g=>Math.abs(y-g.yc)<=g.H/2);
+// 行駛中列車的 x：站外沿主線，進出站沿連接線滑向該站的股道，站內走股道
+function pathX(y,d,txFor){
+  const mx=CX+(d?-MX:MX);
+  for(let j=0;j<G.length;j++){
+    const g=G[j],bot=g.top+g.H;
+    if(y>=g.top-CONN&&y<g.top){if(j===0)continue;return mx+(txFor(j)-mx)*ss((y-(g.top-CONN))/CONN)}
+    if(y>=g.top&&y<=bot)return txFor(j);
+    if(y>bot&&y<=bot+CONN){if(j===G.length-1)continue;return mx+(txFor(j)-mx)*ss((bot+CONN-y)/CONN)}
+  }
+  return mx;
+}
+function predictX(i,d){const trk=stopTracks(i,d),sl=dock.get(i+':'+d)||[];let k=sl.length?sl.findIndex(n=>n===null):0;if(k<0)k=trk.length-1;return trk[k].x}
 
 const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
 const fmt=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');
@@ -312,11 +324,20 @@ const isTerm=(t,p,now)=>{if(p.at===undefined)return false;const L=t.stops.length
 /* ── 底圖（只畫一次） ── */
 function buildMap(){
   let b=`<div class="ln" style="left:${CX-MX}px;top:${G[0].yc}px;height:${G[11].yc-G[0].yc}px"></div><div class="ln" style="left:${CX+MX}px;top:${G[0].yc}px;height:${G[11].yc-G[0].yc}px"></div>`;
+  let cv='';
+  const curve=(mx,tx,yEdge,dirY)=>{let pts=[];for(let n=0;n<=10;n++){const u=n/10;pts.push((mx+(tx-mx)*ss(1-u)).toFixed(1)+','+(yEdge+dirY*CONN*u).toFixed(1))}return pts.join(' ')};
+  G.forEach((g,i)=>g.tk.forEach(k=>{
+    const mx=CX+(k.x<CX?-MX:MX); if(Math.abs(k.x-mx)<1)return;
+    const col=k.m?'var(--ln)':'var(--ptrk)';
+    if(i>0)cv+=`<polyline points="${curve(mx,k.x,g.top,-1)}" stroke="${col}"/>`;
+    if(i<G.length-1)cv+=`<polyline points="${curve(mx,k.x,g.top+g.H,1)}" stroke="${col}"/>`;
+  }));
+  b+=`<svg width="${WW}" height="${MAPH}" style="position:absolute;left:0;top:0;pointer-events:none" fill="none" stroke-width="4" aria-hidden="true">${cv}</svg>`;
   G.forEach((g,i)=>{
     b+=`<div class="sb" style="left:${CX-g.W/2-6}px;width:${g.W+12}px;top:${g.top}px;height:${g.H}px"></div>`;
     g.tk.forEach(k=>{b+=`<div class="tk${k.m?' m':''}" style="left:${k.x}px;top:${g.top}px;height:${g.H}px"></div>`});
     g.pl.forEach((q,j)=>{b+=`<div class="pl" id="pl-${i}-${j}" style="left:${q}px;top:${g.top+8}px;height:${g.H-16}px"></div>`});
-    b+=`<button class="sn" data-i="${i}" style="top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}<small>${DESC[i]}</small></button>`;
+    b+=`<button class="sn" data-i="${i}" style="top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}</button>`;
   });
   b+='<div class="ch" id="chT" style="top:8px"></div><div class="ch" id="chB" style="bottom:8px"></div><div id="fleet"></div>';
   const m=$('#mapIn'); m.style.width=WW+'px'; m.style.height=MAPH+'px'; m.innerHTML=b;
@@ -404,14 +425,11 @@ function render(){
     b.setAttribute('aria-label',`${t.no}次 ${t.dir?'北上':'南下'} ${segLabel(t,p)}`);
   }
 
-  const stopped=new Map();
+  const stopped=new Map(), moving=[];
   allLive.forEach(x=>{
     const {t,p}=x;
     if(p.at!==undefined){const key=p.at+':'+t.dir; if(!stopped.has(key))stopped.set(key,[]); stopped.get(key).push(x)}
-    else if(vis(x)){ // 行駛中：沿主線；經過站區時走通過線
-      const y=yAt(p.f), bi=inBox(y);
-      put(t,p,{x:bi>=0?throughX(bi,t.dir):CX+(t.dir?-MX:MX),y});
-    }
+    else if(vis(x)) moving.push(x);
   });
 
   dock.forEach((slots,key)=>{const ns=(stopped.get(key)||[]).map(x=>x.t.no);slots.forEach((n,k)=>{if(n!==null&&!ns.includes(n))slots[k]=null})});
@@ -427,12 +445,18 @@ function render(){
       const tx=trk[k].x, w=isTerm(t,p,now);
       names[i].classList.add('has');
       document.getElementById(`pl-${i}-${nearPl(i,tx)}`)?.classList.add('hot');
+      lastTrack.set(t.no,{i,x:tx});
       put(t,p,{x:tx,y:G[i].yc+dy,icon,w});
       if(w&&(i===0||i===11)){
         const L=t.stops.length-1, n=t.dir?'':'';
         chips[i?1:0]+=`<span class="${t.dir?'n':''}"><b>${t.no}</b> ${p.k===0?(t.dir?'北上':'南下')+'待發 '+fmt(t.stops[0].dep):fmt(t.stops[L].arr)+' 已到站'}</span>`;
       }
     });
+  });
+  moving.forEach(({t,p})=>{ // 行駛中：沿主線與連接線
+    const a=t.stops[p.k].i, b=t.stops[p.next].i, y=yAt(p.f), lt=lastTrack.get(t.no);
+    const depX=lt&&lt.i===a?lt.x:stopTracks(a,t.dir)[0].x, arrX=predictX(b,t.dir);
+    put(t,p,{x:pathX(y,t.dir,j=>j===a?depX:j===b?arrX:throughX(j,t.dir)),y});
   });
   $('#chT').innerHTML=chips[0]; $('#chB').innerHTML=chips[1];
   fleet.forEach((b,no)=>{if(!seen.has(no)){b.remove();fleet.delete(no)}});
