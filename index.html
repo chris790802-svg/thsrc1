@@ -50,19 +50,21 @@ main{width:100%;max-width:480px}
 .sn.has{color:var(--org)}
 .sn:focus-visible{outline:2px solid var(--org);outline-offset:2px;border-radius:4px}
 #fleet{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
-.tr{all:unset;box-sizing:border-box;position:absolute;width:30px;height:14px;border-radius:7px;background:var(--sb);box-shadow:0 0 0 2px var(--card);z-index:2;color:#fff;font:700 9px/14px "Noto Sans TC",sans-serif;text-align:center;cursor:pointer;font-variant-numeric:tabular-nums;transform:translate(-50%,-50%);transition:left 1s ease,top 1s ease;pointer-events:auto}
+.tr{all:unset;box-sizing:border-box;position:absolute;width:28px;height:14px;border-radius:7px;background:var(--sb);box-shadow:0 0 0 2px var(--card);z-index:2;color:#fff;font:700 9px/14px "Noto Sans TC",sans-serif;text-align:center;cursor:pointer;font-variant-numeric:tabular-nums;transform:translate(-50%,-50%);transition:left 1s ease,top 1s ease;pointer-events:auto}
 .tr::after{content:"";position:absolute;inset:-6px}
 .tr:focus-visible{outline:2px solid var(--org);outline-offset:3px}
 .tr.sel{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ink)}
 .tr.n{background:var(--nb)}
 .tr.w{outline:2px dashed var(--mute);outline-offset:1px}
-.tr.icon{height:auto;width:30px;background:none;box-shadow:none;border-radius:0;outline:0}
+.tr.icon{height:auto;width:28px;background:none;box-shadow:none;border-radius:0;outline:0}
 .tr.icon svg{display:block;width:26px;height:20px;margin:0 auto 1px;filter:drop-shadow(0 1px 1.5px #0006)}
 .tr.icon b{display:block;height:14px;border-radius:7px;background:var(--sb);box-shadow:0 0 0 2px var(--card);font:700 9px/14px "Noto Sans TC",sans-serif}
 .tr.icon.n b{background:var(--nb)}
 .tr.icon.w b{outline:2px dashed var(--mute);outline-offset:1px}
 .tr.icon.sel b{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ink)}
-.ch{position:absolute;left:12px;right:12px;display:flex;flex-wrap:wrap;gap:4px;font-size:.72rem}
+#mapBox{position:relative;overflow:hidden}
+.ch{display:flex;flex-wrap:wrap;gap:4px;font-size:.72rem}
+#chT:not(:empty){padding:10px 12px 0}#chB:not(:empty){padding:0 12px 10px}
 .ch span{background:var(--chip);border-radius:6px;padding:3px 8px;white-space:nowrap}
 .ch b{color:var(--sb)}.ch .n b{color:var(--nb)}
 :root{--plat:#d9d2c3;--platb:#a79f8c;--ptrk:#8d9aa2}
@@ -141,7 +143,7 @@ main{width:100%;max-width:480px}
 </section>
 <div class="lg"><span><i style="background:var(--sb)"></i>南下</span><span><i style="background:var(--nb)"></i>北上</span><span><i style="border:2px dashed var(--mute)"></i>停在端點月台</span></div>
 <div class="empty" id="empty" hidden>目前沒有符合條件的行駛中班次</div>
-<div class="map" id="map"><div id="mapIn"></div></div>
+<div class="map" id="map"><div class="ch" id="chT"></div><div id="mapBox"><div id="mapIn"></div></div><div class="ch" id="chB"></div></div>
 <section class="sh" id="sheet" role="dialog" aria-modal="true" aria-label="列車詳細資訊"><div id="sheetIn"></div></section>
 <p class="note">列車位置依 TDX 時刻表與現在時間推算(非 GPS)。停靠站的列車會停進月台軌並點亮所靠月台;南港、左營以 700T 小圖示意停靠。端點月台指發車前 10 分鐘的待發車,以及到站後 10 分鐘內的列車(皆為假設值)。點選站名可看兩小時內班次,點選列車可看時刻表與自由座車廂。</p>
 </main>
@@ -166,8 +168,8 @@ const I3="TPTTPTTPT",I2="TPTTPT",TC="TPTMMTPT",SD="PTMMTP";
 const LAY=[I3,I2,I2,SD,SD,SD,TC,SD,SD,SD,SD,I3];
 const ICON=new Set([0,11]);          // 用 700T 小圖示意停靠的站：南港、左營
 const TERM_BEFORE=10, TERM_AFTER=10; // 假設值：起站發車前 10 分鐘進月台、終點站到達後 10 分鐘仍停在月台
-const COL=26;                        // 每條股道/月台的欄寬（月台間隔）
-const WW=360, CX=78+(WW-78)/2, MX=13, ZT=50, ZB=50, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
+const COL=32;                        // 每條股道/月台的欄寬（月台間隔）；車次標籤寬 28，相鄰軌不會互相遮住
+const WW=390, CX=78+(WW-78)/2, MX=13, ZT=28, ZB=28, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
 const G=[]; let y0=ZT;
 LAY.forEach((p,i)=>{
   const W=p.length*COL, x0=CX-W/2, tk=[], pl=[];
@@ -179,7 +181,6 @@ LAY.forEach((p,i)=>{
 const MAPH=y0-GAP+ZB;
 const CONN=56;                                  // 站外連接線長度（站間灰線 ↔ 月台軌）
 const ss=s=>s*s*(3-2*s);                        // 連接線的緩和曲線（列車沿同一條曲線行進）
-const lastTrack=new Map();                      // 車次→最近停靠的股道（離站時沿原軌駛出）
 const stopTracks=(i,d)=>G[i].half[d].filter(t=>!t.m).sort((a,b)=>Math.abs(a.x-CX)-Math.abs(b.x-CX));
 function throughX(i,d){const hf=G[i].half[d],mm=hf.filter(t=>t.m);return mm.length?mm[0].x:hf.reduce((a,t)=>Math.abs(t.x-CX)<Math.abs(a.x-CX)?t:a).x}
 const nearPl=(i,x)=>{let b=0,bd=1e9;G[i].pl.forEach((q,j)=>{const dd=Math.abs(q-x);if(dd<bd){bd=dd;b=j}});return b};
@@ -195,7 +196,23 @@ function pathX(y,d,txFor){
   }
   return mx;
 }
-function predictX(i,d){const trk=stopTracks(i,d),sl=dock.get(i+':'+d)||[];let k=sl.length?sl.findIndex(n=>n===null):0;if(k<0)k=trk.length-1;return trk[k].x}
+/* 月台軌分配：每班車依車次「隨機」挑一條停靠軌（同車次同站永遠相同），軌位被占用就換下一條，
+   所以同方向同時停靠的列車不會進同一軌。台中只有左右各 2 條停靠軌，中間 2 條(M)是通過線，不會停車。
+   TDX 沒有實際軌位資料，這是示意用的分配。 */
+const HOLD=8;                                   // 即將進站／剛離站的列車先預訂或保留軌位（分鐘）
+const dock=new Map();                           // '站:方向' → 各停靠軌目前的車次
+const hashNo=(no,i)=>(((parseInt(no,10)||0)*2654435761+i*40503)>>>0);
+function slotsFor(key){const [i,d]=key.split(':').map(Number);if(!dock.has(key))dock.set(key,Array(stopTracks(i,d).length).fill(null));return dock.get(key)}
+function claimSlot(key,no){
+  const slots=slotsFor(key),have=slots.indexOf(no); if(have>=0)return have;
+  const i=+key.split(':')[0],n=slots.length,pref=hashNo(no,i)%n;
+  for(let j=0;j<n;j++){const k=(pref+j)%n;if(slots[k]===null){slots[k]=no;return k}}
+  return -1;
+}
+function trackOf(i,d,no){ // 該車在該站的軌（已佔位用佔位，否則用它的隨機偏好軌）
+  const trk=stopTracks(i,d),sl=dock.get(i+':'+d),k=sl?sl.indexOf(no):-1;
+  return trk[k>=0?k:hashNo(no,i)%trk.length].x;
+}
 
 const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
 const fmt=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');
@@ -339,12 +356,12 @@ function buildMap(){
     g.pl.forEach((q,j)=>{b+=`<div class="pl" id="pl-${i}-${j}" style="left:${q}px;top:${g.top+8}px;height:${g.H-16}px"></div>`});
     b+=`<button class="sn" data-i="${i}" style="top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}</button>`;
   });
-  b+='<div class="ch" id="chT" style="top:8px"></div><div class="ch" id="chB" style="bottom:8px"></div><div id="fleet"></div>';
+  b+='<div id="fleet"></div>';
   const m=$('#mapIn'); m.style.width=WW+'px'; m.style.height=MAPH+'px'; m.innerHTML=b;
   document.querySelectorAll('.sn').forEach(x=>x.onclick=()=>openStation(+x.dataset.i));
 }
 function fit(){ // 窄螢幕等比縮小
-  const m=$('#map'),w=m.clientWidth,s=Math.min(1,w/WW),inn=$('#mapIn');
+  const m=$('#mapBox'),w=m.clientWidth,s=Math.min(1,w/WW),inn=$('#mapIn');
   inn.style.transform=`scale(${s})`; inn.style.marginLeft=Math.max(0,(w-WW*s)/2)+'px'; m.style.height=MAPH*s+'px';
 }
 
@@ -399,7 +416,7 @@ function drawTrain(){
 }
 
 /* ── 渲染 ── */
-const fleet=new Map(), dock=new Map();   // 車次→元素；'站:方向'→月台軌佔用（穩定分配，列車不會在軌道間跳來跳去）
+const fleet=new Map();   // 車次→元素
 function render(){
   const now=nowMin(), F=$('#fleet');
   const allLive=trains.map(t=>({t,p:locate(t,now)})).filter(x=>x.p);
@@ -432,30 +449,36 @@ function render(){
     else if(vis(x)) moving.push(x);
   });
 
-  dock.forEach((slots,key)=>{const ns=(stopped.get(key)||[]).map(x=>x.t.no);slots.forEach((n,k)=>{if(n!==null&&!ns.includes(n))slots[k]=null})});
+  // 軌位：停靠中的車、剛離站的車（保留原軌）、即將進站的車（預訂軌位）才占軌
+  const keep=new Map(), want=new Map(), add=(m,key,no)=>{if(!m.has(key))m.set(key,new Set());m.get(key).add(no)};
+  stopped.forEach((list,key)=>list.forEach(x=>{add(keep,key,x.t.no);add(want,key,x.t.no)}));
+  moving.forEach(({t,p})=>{
+    const a=t.stops[p.k],b=t.stops[p.next];
+    if(now-a.dep<HOLD)add(keep,a.i+':'+t.dir,t.no);
+    if(b.arr-now<HOLD)add(want,b.i+':'+t.dir,t.no);
+  });
+  dock.forEach((slots,key)=>{const k=keep.get(key),w=want.get(key);
+    slots.forEach((n,j)=>{if(n!==null&&!(k&&k.has(n))&&!(w&&w.has(n)))slots[j]=null})});
   stopped.forEach((list,key)=>{
-    const [i,dir]=key.split(':').map(Number), trk=stopTracks(i,dir), icon=ICON.has(i);
-    if(!dock.has(key))dock.set(key,Array(trk.length).fill(null));
-    const slots=dock.get(key); let over=0;
+    const [i,dir]=key.split(':').map(Number), trk=stopTracks(i,dir), icon=ICON.has(i); let over=0;
     list.sort(byNo).forEach(x=>{
-      const {t,p}=x; let k=slots.indexOf(t.no), dy=0;
-      if(k<0){k=slots.indexOf(null);if(k>=0)slots[k]=t.no}
-      if(k<0){const j=over++;k=trk.length-1;dy=(j%2?1:-1)*(Math.floor(j/2)+1)*(icon?40:22)}   // 軌位不夠時沿軌道錯開
+      const {t,p}=x; let k=claimSlot(key,t.no), dy=0;
+      if(k<0){const j=over++;k=hashNo(t.no,i)%trk.length;dy=(j%2?1:-1)*(Math.floor(j/2)+1)*(icon?40:22)}   // 軌位不夠時沿軌道錯開
       if(!vis(x))return;
       const tx=trk[k].x, w=isTerm(t,p,now);
       names[i].classList.add('has');
       document.getElementById(`pl-${i}-${nearPl(i,tx)}`)?.classList.add('hot');
-      lastTrack.set(t.no,{i,x:tx});
       put(t,p,{x:tx,y:G[i].yc+dy,icon,w});
       if(w&&(i===0||i===11)){
-        const L=t.stops.length-1, n=t.dir?'':'';
+        const L=t.stops.length-1;
         chips[i?1:0]+=`<span class="${t.dir?'n':''}"><b>${t.no}</b> ${p.k===0?(t.dir?'北上':'南下')+'待發 '+fmt(t.stops[0].dep):fmt(t.stops[L].arr)+' 已到站'}</span>`;
       }
     });
   });
-  moving.forEach(({t,p})=>{ // 行駛中：沿主線與連接線
-    const a=t.stops[p.k].i, b=t.stops[p.next].i, y=yAt(p.f), lt=lastTrack.get(t.no);
-    const depX=lt&&lt.i===a?lt.x:stopTracks(a,t.dir)[0].x, arrX=predictX(b,t.dir);
+  want.forEach((set,key)=>[...set].forEach(no=>claimSlot(key,no))); // 即將進站者預訂（停靠中的已先占位）
+  moving.forEach(({t,p})=>{ // 行駛中：沿主線與連接線，進出站對準自己的軌
+    const a=t.stops[p.k].i, b=t.stops[p.next].i, y=yAt(p.f);
+    const depX=trackOf(a,t.dir,t.no), arrX=trackOf(b,t.dir,t.no);
     put(t,p,{x:pathX(y,t.dir,j=>j===a?depX:j===b?arrX:throughX(j,t.dir)),y});
   });
   $('#chT').innerHTML=chips[0]; $('#chB').innerHTML=chips[1];
