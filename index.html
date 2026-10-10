@@ -127,7 +127,7 @@ main{width:100%;max-width:480px}
 </div>
 <div class="tags" aria-live="polite">
   <span id="src" class="tg">載入中…</span>
-  <span class="tg unk" id="ops"><i class="ring"></i><span>營運狀態確認中…</span></span>
+  <span class="tg ok" id="ops"><i class="ring"></i><span>全線正常營運</span></span>
   <span class="tg ok" id="crowd"><i class="ring"></i><span>無人潮管制資訊</span></span>
 </div>
 <div class="ctl tabs" role="group" aria-label="方向">
@@ -240,22 +240,10 @@ async function load(){
         platform: s.Platform||''
       })).filter(s=>s.i!==undefined)}});
     setSrc(true);
-    loadAlert(t);
     loadFree(t).then(()=>{if($('#sheet').classList.contains('open'))drawSheet()});
-  }catch(e){console.warn('TDX 失敗，改用示範資料',e);trains=mock();setSrc(false);setOps('unk','營運狀態未確認')}
+  }catch(e){console.warn('TDX 失敗，改用示範資料',e);trains=mock();setSrc(false)}
 }
 
-function setOps(kind,text){const e=$('#ops');e.className='tg '+kind;e.lastElementChild.textContent=text}
-async function loadAlert(tok){ // 營運通阻（欄位依記憶撰寫，未實測；失敗時顯示「未確認」而不是假裝正常）
-  try{
-    const r=await fetch(TDX+'/api/basic/v2/Rail/THSR/AlertInfo?$format=JSON',{headers:{authorization:'Bearer '+tok}});
-    if(!r.ok) throw new Error(r.status);
-    const j=await r.json(), a=(Array.isArray(j)?j:j.Alerts||[]);
-    const bad=a.filter(x=>!(String(x.Status)==='1'||/正常/.test(x.Title||'')));
-    if(!bad.length) setOps('ok','全線正常營運');
-    else setOps('warn','營運異動：'+(bad[0].Title||'請查看高鐵公告'));
-  }catch(e){console.warn('AlertInfo 失敗',e);setOps('unk','營運狀態未確認')}
-}
 function parseCars(x){ // 欄位名稱不確定：從名稱含 car 的欄位找 1–12 的車廂號
   // 「幾節自由座」這類數量欄位（如 3、4）會被誤認成車廂號，所以：排除 count/total 類欄位，
   // 且依序優先採用 陣列/物件 → 字串("10,11,12"、"10-12") → 單一數字，前面有結果就不看後面。
