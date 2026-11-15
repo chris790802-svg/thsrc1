@@ -45,17 +45,24 @@ function parseCars(x) { // 排除「數量」欄位；優先陣列/物件 → �
 
 const tok = await token();
 
-// 1) 今日時刻表（必要：失敗就讓工作失敗，網站維持上一次的部署）
-const tt = await get(tok, '/api/basic/v2/Rail/THSR/DailyTimetable/Today?$format=JSON');
-const trains = tt.map(x => {
+// 1) 今日時刻表（必要：失敗就讓工作失敗）
+// 明確指定「今天」的日期去查，並逐班檢查 TrainDate，不是今天的班次一律丟掉，避免混入其他日期（例如假日加班車）的車次
+let tt;
+try { tt = await get(tok, `/api/basic/v2/Rail/THSR/DailyTimetable/TrainDate/${today}?$format=JSON`); }
+catch (e) { console.warn('TrainDate 查詢失敗，改用 Today：', e.message); tt = await get(tok, '/api/basic/v2/Rail/THSR/DailyTimetable/Today?$format=JSON'); }
+const dayOf = x => (x.TrainDate || x.DailyTrainInfo?.TrainDate || '').slice(0, 10);
+const wrong = tt.filter(x => dayOf(x) && dayOf(x) !== today);
+if (wrong.length) console.warn(`丟掉 ${wrong.length} 班非今日(${today})的車次，例：${wrong[0].DailyTrainInfo?.TrainNo} ${dayOf(wrong[0])}`);
+const trains = tt.filter(x => !dayOf(x) || dayOf(x) === today).map(x => {
   const i = x.DailyTrainInfo || x.TrainInfo;
   return { no: i.TrainNo, dir: i.Direction,
     stops: x.StopTimes.filter(s => IDS.includes(s.StationID)).map(s => ({
       i: IDS.indexOf(s.StationID), name: s.StationName.Zh_tw,
       arr: toMin(s.ArrivalTime || s.DepartureTime), dep: toMin(s.DepartureTime || s.ArrivalTime) })) };
 });
+if (trains.length < 50) throw new Error('今日班次數異常少：' + trains.length);
 write('timetable.json', { date: today, trains });
-console.log('時刻表', trains.length, '班');
+console.log('時刻表', today, trains.length, '班');
 
 // 2) 自由座車廂（失敗只略過）
 try {

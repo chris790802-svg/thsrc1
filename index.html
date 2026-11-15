@@ -63,6 +63,11 @@ main{width:100%;max-width:480px}
 .tr.icon.w b{outline:2px dashed var(--mute);outline-offset:1px}
 .tr.icon.sel b{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ink)}
 #mapBox{position:relative;overflow:hidden}
+.park{position:absolute;width:30px;transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:1}
+.park svg{display:block;width:26px;height:20px;margin:0 auto 2px;opacity:.75;filter:grayscale(.5)}
+.park span{display:block;font:700 8.5px/10px "Noto Sans TC",sans-serif;color:var(--mute);white-space:nowrap}
+.park.off{display:none}
+.tr.icon .ld{display:block;margin:1px -8px 0;font:700 8px/10px "Noto Sans TC",sans-serif;color:var(--org);white-space:nowrap}
 .ch{display:flex;flex-wrap:wrap;gap:4px;font-size:.72rem}
 #chT:not(:empty){padding:10px 12px 0}#chB:not(:empty){padding:0 12px 10px}
 .ch span{background:var(--chip);border-radius:6px;padding:3px 8px;white-space:nowrap}
@@ -119,15 +124,15 @@ main{width:100%;max-width:480px}
 <main>
 <section class="top">
 <h1>高鐵全線列車即時位置</h1>
-<div class="big"><b id="tot">0</b><span>列(含端點待發)</span><div class="clock" id="clk"></div></div>
+<div class="big"><b id="tot">0</b><span>列(含即將發車)</span><div class="clock" id="clk"></div></div>
 <div class="bk">
 <div>運行中<b id="run">0</b></div>
-<div>端點月台<b id="ter">0</b></div>
+<div>整備中<b id="ter">0</b></div>
 <div>南下 / 北上<b id="dr">0 / 0</b></div>
 </div>
 <div class="tags" aria-live="polite">
   <span id="src" class="tg">載入中…</span>
-  <span class="tg ok" id="ops"><i class="ring"></i><span>全線正常營運</span></span>
+  <span class="tg unk" id="ops"><i class="ring"></i><span>營運狀態確認中…</span></span>
   <span class="tg ok" id="crowd"><i class="ring"></i><span>無人潮管制資訊</span></span>
 </div>
 <div class="ctl tabs" role="group" aria-label="方向">
@@ -141,24 +146,17 @@ main{width:100%;max-width:480px}
 </form>
 <div id="qmsg" role="status"></div>
 </section>
-<div class="lg"><span><i style="background:var(--sb)"></i>南下</span><span><i style="background:var(--nb)"></i>北上</span><span><i style="border:2px dashed var(--mute)"></i>停在端點月台</span></div>
+<div class="lg"><span><i style="background:var(--sb)"></i>南下</span><span><i style="background:var(--nb)"></i>北上</span><span><i style="border:2px dashed var(--mute)"></i>即將發車(端點)</span></div>
 <div class="empty" id="empty" hidden>目前沒有符合條件的行駛中班次</div>
 <div class="map" id="map"><div class="ch" id="chT"></div><div id="mapBox"><div id="mapIn"></div></div><div class="ch" id="chB"></div></div>
 <section class="sh" id="sheet" role="dialog" aria-modal="true" aria-label="列車詳細資訊"><div id="sheetIn"></div></section>
-<p class="note">列車位置依 TDX 時刻表與現在時間推算(非 GPS)。停靠站的列車會停進月台軌並點亮所靠月台;南港、左營以 700T 小圖示意停靠。端點月台指發車前 10 分鐘的待發車,以及到站後 10 分鐘內的列車(皆為假設值)。點選站名可看兩小時內班次,點選列車可看時刻表與自由座車廂。</p>
+<p class="note">列車位置依 TDX 時刻表與現在時間推算(非 GPS)。停靠站的列車會停進月台軌並點亮所靠月台;南港、左營每條月台軌都以 700T 小圖示意：到站（終點）後車次直接轉為「整備中」，發車前 10 分鐘轉為「即將發車」並顯示車號（皆為假設值）。島式月台站時間太近的車會換到不同月台，側式月台站後車等前車離開月台軌範圍後才進月台。點選站名可看兩小時內班次,點選列車可看時刻表與自由座車廂。</p>
 </main>
 <script>
-const CID='chris790802-bb9b8edc-adf0-4ac9';
-const SEC='612346ff-54e3-4ab7-ad19-44d74771ec35';
-const TDX='https://tdx.transportdata.tw';
 const ST=[['0990','南港'],['1000','台北'],['1010','板橋'],['1020','桃園'],['1030','新竹'],['1035','苗栗'],['1040','台中'],['1043','彰化'],['1047','雲林'],['1050','嘉義'],['1060','台南'],['1070','左營']];
 const IDX=Object.fromEntries(ST.map((s,i)=>[s[0],i]));
 const dirArrow=d=>`<i class="ar" style="font-style:normal;font-size:.72em;margin-right:3px;color:var(${d?'--nb':'--sb'})" aria-hidden="true">${d?'▲':'▼'}</i>`;
 const FREE_CARS=[10,11,12]; // 備援假設值：TDX 沒資料時才使用
-/* TDX「取得高鐵當天所有車次的自由座車廂資料」(THSRApi_DailyFreeSeatingCar)。
-   我無法讀取 swagger 頁面，路徑與欄位是推測的；若無法取得資料，請把 swagger 上 Try it out 顯示的
-   Request URL（/api/basic/ 之後的部分）貼到下面清單最前面。 */
-const FREE_URLS=['/api/basic/v2/Rail/THSR/FreeSeatingCar/Today?$format=JSON','/api/basic/v2/Rail/THSR/DailyFreeSeatingCar/Today?$format=JSON','/api/basic/v2/Rail/THSR/FreeSeatingCar?$format=JSON'];
 const freeMap=new Map(); let freeOk=false;
 const $=s=>document.querySelector(s);
 let trains=[], filter='all', selNo=null;
@@ -179,6 +177,7 @@ LAY.forEach((p,i)=>{
   y0+=H+GAP;
 });
 const MAPH=y0-GAP+ZB;
+let parkTotal=0;
 const CONN=56;                                  // 站外連接線長度（站間灰線 ↔ 月台軌）
 const ss=s=>s*s*(3-2*s);                        // 連接線的緩和曲線（列車沿同一條曲線行進）
 const stopTracks=(i,d)=>G[i].half[d].filter(t=>!t.m).sort((a,b)=>Math.abs(a.x-CX)-Math.abs(b.x-CX));
@@ -196,90 +195,52 @@ function pathX(y,d,txFor){
   }
   return mx;
 }
-/* 月台軌分配：每班車依車次「隨機」挑一條停靠軌（同車次同站永遠相同），軌位被占用就換下一條，
-   所以同方向同時停靠的列車不會進同一軌。台中只有左右各 2 條停靠軌，中間 2 條(M)是通過線，不會停車。
-   TDX 沒有實際軌位資料，這是示意用的分配。 */
-const HOLD=8;                                   // 即將進站／剛離站的列車先預訂或保留軌位（分鐘）
-const dock=new Map();                           // '站:方向' → 各停靠軌目前的車次
+/* 月台軌分配（示意；TDX 沒有實際軌位資料）
+   島式月台站（南港、台北、板橋、台中、左營）：兩條軌夾著同一座月台，所以時間太近的車會優先換到「不同月台」的軌，
+     自己方向的軌都在同一座月台時，會借用對向的月台軌。
+   側式月台站（其餘）：只有自己方向的一條軌；前車還沒離開月台軌範圍，後車先在站外連接線等，前車離開後才進月台。 */
+const ISL=new Set([0,1,2,6,11]);
+const allTr=i=>G[i]._st||(G[i]._st=G[i].tk.filter(t=>!t.m).sort((a,b)=>a.x-b.x));          // 該站所有可停靠軌
+const sideOf=(i,d)=>allTr(i).map((t,j)=>({t,j})).filter(o=>d?o.t.x<CX:o.t.x>CX)
+  .sort((a,b)=>Math.abs(a.t.x-CX)-Math.abs(b.t.x-CX)).map(o=>o.j);                         // 某方向自己的軌（由內而外）
+const platOf=(i,j)=>nearPl(i,allTr(i)[j].x);                                               // 該軌靠哪座月台
+const dock=new Map();                                                                      // 站 → 各軌目前占用的車次
 const hashNo=(no,i)=>(((parseInt(no,10)||0)*2654435761+i*40503)>>>0);
-function slotsFor(key){const [i,d]=key.split(':').map(Number);if(!dock.has(key))dock.set(key,Array(stopTracks(i,d).length).fill(null));return dock.get(key)}
-function claimSlot(key,no){
-  const slots=slotsFor(key),have=slots.indexOf(no); if(have>=0)return have;
-  const i=+key.split(':')[0],n=slots.length,pref=hashNo(no,i)%n;
-  for(let j=0;j<n;j++){const k=(pref+j)%n;if(slots[k]===null){slots[k]=no;return k}}
-  return -1;
+const slotsOf=i=>{if(!dock.has(i))dock.set(i,Array(allTr(i).length).fill(null));return dock.get(i)};
+function claimSlot(i,no,d){
+  const sl=slotsOf(i),have=sl.indexOf(no); if(have>=0)return have;
+  const own=sideOf(i,d),opp=sideOf(i,1-d),used=new Set(sl.map((n,j)=>n!==null?platOf(i,j):-1));
+  const free=a=>a.filter(j=>sl[j]===null),fresh=a=>free(a).filter(j=>!used.has(platOf(i,j)));
+  const pick=a=>a.length?a[hashNo(no,i)%a.length]:-1;
+  let k=pick(fresh(own));
+  if(k<0&&ISL.has(i))k=pick(fresh(opp));
+  if(k<0)k=pick(free(own));
+  if(k<0&&ISL.has(i))k=pick(free(opp));
+  if(k>=0)sl[k]=no;
+  return k;                                   // -1＝沒有可用的軌（側式站：後車需等待）
 }
-function trackOf(i,d,no){ // 該車在該站的軌（已佔位用佔位，否則用它的隨機偏好軌）
-  const trk=stopTracks(i,d),sl=dock.get(i+':'+d),k=sl?sl.indexOf(no):-1;
-  return trk[k>=0?k:hashNo(no,i)%trk.length].x;
-}
+const trackIdx=(i,d,no)=>{const sl=dock.get(i),k=sl?sl.indexOf(no):-1;if(k>=0)return k;const own=sideOf(i,d);return own[hashNo(no,i)%own.length]};
+const trackOf=(i,d,no)=>allTr(i)[trackIdx(i,d,no)].x;
 
 const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
 const fmt=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');
 const nowMin=()=>{const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));return d.getHours()*60+d.getMinutes()+d.getSeconds()/60};
 
-async function getToken(){
-  const r=await fetch(TDX+'/auth/realms/TDXConnect/protocol/openid-connect/token',{method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({grant_type:'client_credentials',client_id:CID,client_secret:SEC})});
-  const j=await r.json(); if(!j.access_token) throw new Error('token'); return j.access_token;
-}
-
-async function load(){
-  try{
-    const t=await getToken();
-    const r=await fetch(TDX+'/api/basic/v2/Rail/THSR/DailyTimetable/Today?$format=JSON',{headers:{authorization:'Bearer '+t}});
-    if(!r.ok) throw new Error(r.status);
-    const j=await r.json();
-    trains=j.map(x=>{const i=x.DailyTrainInfo||x.TrainInfo;return{no:i.TrainNo,dir:i.Direction,
-      stops:x.StopTimes.map(s=>({
-        i:IDX[s.StationID],
-        name:s.StationName.Zh_tw,
-        arr:toMin(s.ArrivalTime||s.DepartureTime),
-        dep:toMin(s.DepartureTime||s.ArrivalTime),
-        platform: s.Platform||''
-      })).filter(s=>s.i!==undefined)}});
-    setSrc(true);
-    loadFree(t).then(()=>{if($('#sheet').classList.contains('open'))drawSheet()});
-  }catch(e){console.warn('TDX 失敗，改用示範資料',e);trains=mock();setSrc(false)}
-}
-
-function parseCars(x){ // 欄位名稱不確定：從名稱含 car 的欄位找 1–12 的車廂號
-  // 「幾節自由座」這類數量欄位（如 3、4）會被誤認成車廂號，所以：排除 count/total 類欄位，
-  // 且依序優先採用 陣列/物件 → 字串("10,11,12"、"10-12") → 單一數字，前面有結果就不看後面。
-  const grab=(v,out)=>{
-    if(typeof v==='number'){if(v>=1&&v<=12)out.add(v)}
-    else if(typeof v==='string'){
-      v=v.replace(/(\d+)\s*[-~～至]\s*(\d+)/g,(m,a,b)=>{for(let c=+a;c<=+b;c++)if(c>=1&&c<=12)out.add(c);return ' '});
-      v.split(/\D+/).forEach(n=>{n=parseInt(n,10);if(n>=1&&n<=12)out.add(n)});
-    }
-    else if(Array.isArray(v))v.forEach(e=>grab(e,out));
-    else if(v&&typeof v==='object')Object.values(v).forEach(e=>grab(e,out));
-  };
-  const skip=/count|total|qty|quantity|numberof|numof|sum|length/i;
-  const tiers=[new Set(),new Set(),new Set()];
-  Object.entries(x).forEach(([k,v])=>{
-    if(!/car/i.test(k)||skip.test(k)) return;
-    grab(v,tiers[v&&typeof v==='object'?0:typeof v==='string'?1:2]);
-  });
-  const hit=tiers.find(t=>t.size);
-  return hit?[...hit].sort((a,b)=>a-b):[];
-}
-async function loadFree(tok){
-  for(const u of FREE_URLS){
-    try{
-      const r=await fetch(TDX+u,{headers:{authorization:'Bearer '+tok}});
-      if(!r.ok) continue;
-      const j=await r.json(), arr=Array.isArray(j)?j:(j.FreeSeatingCars||j.Trains||[]);
-      console.log('自由座原始資料範例（欄位對不上時請貼給我）',u,arr[0]);
-      arr.forEach(x=>{
-        const no=x.TrainNo||(x.DailyTrainInfo&&x.DailyTrainInfo.TrainNo)||(x.TrainInfo&&x.TrainInfo.TrainNo);
-        const cars=parseCars(x); if(no&&cars.length) freeMap.set(String(parseInt(no,10)),cars);
-      });
-      if(freeMap.size){freeOk=true;return}
-    }catch(e){console.warn('自由座 API 失敗',u,e)}
+const J=async f=>{const r=await fetch('data/'+f+'?t='+Date.now());if(!r.ok)throw new Error(f+' '+r.status);return r.json()};
+const todayStr=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'});
+function setOps(kind,text){const e=$('#ops');e.className='tg '+kind;e.lastElementChild.textContent=text}
+async function load(){ // 資料由 GitHub Actions 定時從 TDX 抓好放在 data/，網頁不接觸金鑰
+  try{const tt=await J('timetable.json');
+    if(tt.date===todayStr()){trains=tt.trains;setSrc(true,tt.date)}
+    else{trains=[];setSrc(true,tt.date)} // 資料不是今天的：寧可不顯示列車，也不拿昨天的班表當今天用
   }
+  catch(e){console.warn(e);if(!trains.length){trains=mock();setSrc(false)}}
+  try{const f=await J('free.json');freeMap.clear();Object.entries(f.cars||{}).forEach(([k,v])=>freeMap.set(String(parseInt(k,10)),v));freeOk=freeMap.size>0}catch(e){}
+  try{const a=await J('alert.json'),age=(Date.now()-Date.parse(a.updated))/60000;
+    if(isNaN(age)||age>90||a.status==='unk')setOps('unk','營運狀態未確認');else setOps(a.status,a.text)}
+  catch(e){setOps('unk','營運狀態未確認')}
 }
+
 function freeHtml(t){
   const real=freeMap.get(String(parseInt(t.no,10)));
   if(real) return `<div class="fc">${real.map(c=>`<span>${c} 號車廂</span>`).join('')}</div>
@@ -287,7 +248,9 @@ function freeHtml(t){
   const bars=freeCars(t).map(c=>`<div class="car"><b>${c.c} 號車廂</b><div class="bar"><div style="width:${c.pct}%;background:${c.col}"></div></div><span>${c.txt}</span></div>`).join('');
   return `<div class="cars">${bars}</div><p class="fnote">${freeOk?'TDX 資料中找不到本班車':'尚未取得 TDX 自由座資料'}，以上車廂與擁擠度為假設值，請以高鐵官方與站內公告為準。</p>`;
 }
-function setSrc(ok){const b=$('#src');b.textContent=ok?'TDX 時刻表':'示範資料（TDX 連線失敗）';b.className='tg '+(ok?'live':'demo')}
+function setSrc(ok,date){const b=$('#src'),same=date===todayStr();
+  b.textContent=ok?'TDX 時刻表 '+date.slice(5)+(same?'':'（非今日，暫不顯示列車）'):'示範資料（讀不到 data/timetable.json）';
+  b.className='tg '+(ok&&same?'live':'demo')}
 function mock(){
   const cum=[0,9,19,29,44,57,71,81,91,106,124,138],skip=[[],[2,5,8],[2,3,5,8,9]],out=[];
   for(let k=0;k<70;k++)for(const dir of[0,1]){
@@ -306,7 +269,8 @@ function locate(t,now){
   for(let k=0;k<=L;k++){
     // 起站：發車前 TERM_BEFORE 分鐘已在月台；終點站：到達後 TERM_AFTER 分鐘仍在月台（時刻表沒有這段，屬假設值）
     const a=s[k].arr-(k===0?TERM_BEFORE:0), d=s[k].dep+(k===L?TERM_AFTER:0);
-    if(now>=a&&now<=d) return{at:s[k].i,f:s[k].i,k};
+    const endPark=k===L&&ICON.has(s[k].i);   // 南港、左營終點：到站後直接轉為「整備中」，不再顯示車次
+    if(!endPark&&now>=a&&now<=d) return{at:s[k].i,f:s[k].i,k};
     if(k<L&&now>s[k].dep&&now<s[k+1].arr){
       const p=(now-s[k].dep)/(s[k+1].arr-s[k].dep),f=s[k].i+(s[k+1].i-s[k].i)*p;
       return{f,k,next:k+1};
@@ -342,6 +306,7 @@ function buildMap(){
     b+=`<div class="sb" style="left:${CX-g.W/2-6}px;width:${g.W+12}px;top:${g.top}px;height:${g.H}px"></div>`;
     g.tk.forEach(k=>{b+=`<div class="tk${k.m?' m':''}" style="left:${k.x}px;top:${g.top}px;height:${g.H}px"></div>`});
     g.pl.forEach((q,j)=>{b+=`<div class="pl" id="pl-${i}-${j}" style="left:${q}px;top:${g.top+8}px;height:${g.H-16}px"></div>`});
+    if(ICON.has(i))allTr(i).forEach(t=>{parkTotal++;b+=`<div class="park" id="pk-${i}-${Math.round(t.x)}" style="left:${t.x}px;top:${g.yc}px"><svg viewBox="0 0 60 46" aria-hidden="true"><use href="#t700"/></svg><span>整備中</span></div>`});
     b+=`<button class="sn" data-i="${i}" style="top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}</button>`;
   });
   b+='<div id="fleet"></div>';
@@ -385,8 +350,8 @@ function drawTrain(){
   const now=nowMin(),p=locate(t,now),first=t.stops[0],L=t.stops.length-1,last=t.stops[L];
   const cur=p?p.k:-1,atStn=p&&p.at!==undefined;
   let st;
-  if(!p) st=now<first.dep?`尚未進站，${fmt(first.dep)} 發車`:'本班已結束運行';
-  else if(atStn) st=p.k===0&&now<first.dep?`端點待發，約 ${Math.ceil(first.dep-now)} 分後發車`:p.k===L?`已到站 ${last.name}`:`停靠 ${ST[p.at][1]}`;
+  if(!p) st=now<first.dep?`尚未進站，${fmt(first.dep)} 發車`:(ICON.has(last.i)?`已抵達 ${last.name}，轉為整備中`:'本班已結束運行');
+  else if(atStn) st=p.k===0&&now<first.dep?`即將發車，約 ${Math.ceil(first.dep-now)} 分後發車`:p.k===L?`已到站 ${last.name}`:`停靠 ${ST[p.at][1]}`;
   else st=`運行中 · ${segLabel(t,p)} · 下一站 ${t.stops[p.next].name} ${fmt(t.stops[p.next].arr)}`;
   const rows=t.stops.map((s,k)=>{
     const cls=!p?'':atStn&&k===cur?'cu':!atStn&&k===p.next?'nx':k<(atStn?cur:p.next)?'ps':'';
@@ -411,7 +376,7 @@ function render(){
   const vis=x=>filter==='all'||String(x.t.dir)===filter;
   let run=0,ter=0,sb=0,nb=0;
   allLive.forEach(({t,p})=>{isTerm(t,p,now)?ter++:run++;t.dir?nb++:sb++});
-  $('#tot').textContent=allLive.length; $('#run').textContent=run; $('#ter').textContent=ter; $('#dr').textContent=sb+' / '+nb;
+  $('#tot').textContent=allLive.length; $('#run').textContent=run; $('#dr').textContent=sb+' / '+nb;
   $('#clk').textContent=fmt(now);
   $('#empty').hidden=allLive.some(vis);
 
@@ -425,7 +390,7 @@ function render(){
     seen.add(t.no);
     b.className='tr'+(t.dir?' n':'')+(o.icon?' icon':'')+(o.w?' w':'')+(selNo===t.no?' sel':'');
     b.style.left=o.x+'px'; b.style.top=o.y+'px';
-    const h=o.icon?`<svg viewBox="0 0 60 46" aria-hidden="true"><use href="#t700"/></svg><b>${t.no}</b>`:t.no;
+    const h=o.icon?`<svg viewBox="0 0 60 46" aria-hidden="true"><use href="#t700"/></svg><b>${t.no}</b>${o.w?'<small class="ld">即將發車</small>':''}`:t.no;
     if(b._h!==h){b.innerHTML=h;b._h=h}
     b.setAttribute('aria-label',`${t.no}次 ${t.dir?'北上':'南下'} ${segLabel(t,p)}`);
   }
@@ -433,37 +398,46 @@ function render(){
   const stopped=new Map(), moving=[];
   allLive.forEach(x=>{
     const {t,p}=x;
-    if(p.at!==undefined){const key=p.at+':'+t.dir; if(!stopped.has(key))stopped.set(key,[]); stopped.get(key).push(x)}
+    if(p.at!==undefined){if(!stopped.has(p.at))stopped.set(p.at,[]); stopped.get(p.at).push(x)}
     else if(vis(x)) moving.push(x);
   });
 
-  // 軌位：停靠中的車、剛離站的車（保留原軌）、即將進站的車（預訂軌位）才占軌
-  const keep=new Map(), want=new Map(), add=(m,key,no)=>{if(!m.has(key))m.set(key,new Set());m.get(key).add(no)};
-  stopped.forEach((list,key)=>list.forEach(x=>{add(keep,key,x.t.no);add(want,key,x.t.no)}));
+  // 軌位：停靠中的車、還在出發站月台軌範圍內的前車（保留原軌）、進入進站連接線的車（預訂軌位）才占軌
+  const keep=new Map(), want=new Map(), add=(m,i,no,d)=>{if(!m.has(i))m.set(i,new Map());m.get(i).set(no,d)};
+  stopped.forEach((list,i)=>list.forEach(x=>{add(keep,i,x.t.no,x.t.dir);add(want,i,x.t.no,x.t.dir)}));
   moving.forEach(({t,p})=>{
-    const a=t.stops[p.k],b=t.stops[p.next];
-    if(now-a.dep<HOLD)add(keep,a.i+':'+t.dir,t.no);
-    if(b.arr-now<HOLD)add(want,b.i+':'+t.dir,t.no);
+    const a=t.stops[p.k],b=t.stops[p.next],y=yAt(p.f),ga=G[a.i],gb=G[b.i];
+    if(t.dir?y>=ga.top:y<=ga.top+ga.H)add(keep,a.i,t.no,t.dir);                    // 前車還沒離開月台軌範圍
+    if(t.dir?y<=gb.top+gb.H+CONN:y>=gb.top-CONN)add(want,b.i,t.no,t.dir);          // 已進連接線，預訂軌位
   });
-  dock.forEach((slots,key)=>{const k=keep.get(key),w=want.get(key);
+  dock.forEach((slots,i)=>{const k=keep.get(i),w=want.get(i);
     slots.forEach((n,j)=>{if(n!==null&&!(k&&k.has(n))&&!(w&&w.has(n)))slots[j]=null})});
-  stopped.forEach((list,key)=>{
-    const [i,dir]=key.split(':').map(Number), trk=stopTracks(i,dir), icon=ICON.has(i); let over=0;
+
+  document.querySelectorAll('.park.off').forEach(e=>e.classList.remove('off'));
+  let depN=0;
+  stopped.forEach((list,i)=>{
+    const icon=ICON.has(i);
     list.sort(byNo).forEach(x=>{
-      const {t,p}=x; let k=claimSlot(key,t.no), dy=0;
-      if(k<0){const j=over++;k=hashNo(t.no,i)%trk.length;dy=(j%2?1:-1)*(Math.floor(j/2)+1)*(icon?40:22)}   // 軌位不夠時沿軌道錯開
+      const {t,p}=x, k=claimSlot(i,t.no,t.dir);
       if(!vis(x))return;
-      const tx=trk[k].x, w=isTerm(t,p,now);
       names[i].classList.add('has');
+      const w=isTerm(t,p,now); let tx,y=G[i].yc;
+      if(k<0){ // 軌被前車占用：後車先在站外連接線等，前車離開月台軌範圍後再進月台
+        y=t.dir?G[i].top+G[i].H+14:G[i].top-14;
+        put(t,p,{x:pathX(y,t.dir,j=>j===i?trackOf(i,t.dir,t.no):throughX(j,t.dir)),y,icon:false,w:false});
+        return;
+      }
+      tx=allTr(i)[k].x;
       document.getElementById(`pl-${i}-${nearPl(i,tx)}`)?.classList.add('hot');
-      put(t,p,{x:tx,y:G[i].yc+dy,icon,w});
-      if(w&&(i===0||i===11)){
-        const L=t.stops.length-1;
-        chips[i?1:0]+=`<span class="${t.dir?'n':''}"><b>${t.no}</b> ${p.k===0?(t.dir?'北上':'南下')+'待發 '+fmt(t.stops[0].dep):fmt(t.stops[L].arr)+' 已到站'}</span>`;
+      put(t,p,{x:tx,y,icon,w});
+      if(w&&icon&&p.k===0){ // 南港/左營起站：發車前 10 分鐘「整備中」轉為「即將發車」
+        depN++; document.getElementById(`pk-${i}-${Math.round(tx)}`)?.classList.add('off');
+        chips[i?1:0]+=`<span class="${t.dir?'n':''}"><b>${t.no}</b> ${t.dir?'北上':'南下'}即將發車 ${fmt(t.stops[0].dep)}</span>`;
       }
     });
   });
-  want.forEach((set,key)=>[...set].forEach(no=>claimSlot(key,no))); // 即將進站者預訂（停靠中的已先占位）
+  $('#ter').textContent=parkTotal-depN;   // 整備中車輛數 = 南港、左營所有月台軌 − 即將發車的車
+  want.forEach((mp,i)=>mp.forEach((d,no)=>claimSlot(i,no,d))); // 即將進站者預訂（停靠中的已先占位）
   // 行駛中：沿主線與連接線，進出站對準自己的軌；同方向靠太近的車沿軌道上下錯開，車號不會互相蓋住
   const mv=moving.map(({t,p})=>({t,p,y:yAt(p.f)})), MING=18;
   [0,1].forEach(d=>{
@@ -502,7 +476,7 @@ $('#sf').onsubmit=e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
 window.addEventListener('resize',fit);
 buildMap(); fit();
-load().then(()=>{render();setInterval(render,15000);setInterval(load,3600000)});
+load().then(()=>{render();setInterval(render,15000);setInterval(load,300000)});
 </script>
 </body>
 </html>
