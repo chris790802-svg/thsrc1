@@ -30,7 +30,8 @@ jobs:
           FREE_SEAT_PATH: ${{ vars.FREE_SEAT_PATH }}
         run: |
           mkdir -p _site/data
-          cp index.html _site/
+          cp index.html icon.svg manifest.webmanifest _site/
+          cp -r icons _site/
           node scripts/fetch-tdx.mjs _site/data
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+ <rect width="512" height="512" fill="#ffe3d1"/>
+ <g transform="translate(70,97) scale(6.2)">
+  <clipPath id="b"><path d="M6 38C4 21 9 6 30 6C51 6 56 21 54 38C54 41.5 52 43 49 43L11 43C8 43 6 41.5 6 38Z"/></clipPath>
+  <path d="M6 38C4 21 9 6 30 6C51 6 56 21 54 38C54 41.5 52 43 49 43L11 43C8 43 6 41.5 6 38Z" fill="#fff"/>
+  <path clip-path="url(#b)" d="M0 30C12 37 48 37 60 30L60 46L0 46Z" fill="#f26a1b"/>
+  <path d="M14 16C14 13 18 12 30 12C42 12 46 13 46 16L45.5 28C45.5 29.8 44.3 30.5 42.8 30.5L17.2 30.5C15.7 30.5 14.5 29.8 14.5 28Z" fill="#2f4f73" stroke="#243447" stroke-width="2" stroke-linejoin="round"/>
+  <g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"><path d="M18.5 16.5L25.5 16.5"/><path d="M35.5 16.5L39 16.5"/></g>
+  <rect x="24" y="35.5" width="12" height="4" rx="2" fill="#243447"/>
+  <g fill="#ffd23f" stroke="#243447" stroke-width="1.6"><circle cx="15" cy="36.5" r="2.8"/><circle cx="45" cy="36.5" r="2.8"/></g>
+  <path d="M6 38C4 21 9 6 30 6C51 6 56 21 54 38C54 41.5 52 43 49 43L11 43C8 43 6 41.5 6 38Z" fill="none" stroke="#243447" stroke-width="2.6" stroke-linejoin="round"/>
+  <rect x="11" y="42" width="38" height="3.2" rx="1.6" fill="#3a4a5c" stroke="#243447" stroke-width="1.2"/>
+ </g>
+</svg>
