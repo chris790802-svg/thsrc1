@@ -46,7 +46,9 @@ main{width:100%;max-width:480px}
 .tk.m{background:var(--ln)}
 .pl{position:absolute;width:18px;margin-left:-9px;border-radius:3px;background:var(--plat);border:1px solid var(--platb)}
 .pl.hot{background:var(--orgl);border:2px solid var(--org)}
-.sn{all:unset;box-sizing:border-box;display:block;cursor:pointer;position:absolute;left:0;width:78px;text-align:right;margin-top:-14px;font-weight:700;font-size:.95rem;line-height:18px}
+.sn{all:unset;box-sizing:border-box;display:block;cursor:pointer;position:absolute;transform:translate(-50%,-50%);text-align:center;white-space:nowrap;padding:0 3px;border-radius:6px;background:color-mix(in srgb,var(--card) 85%,transparent);font-weight:700;font-size:.8rem;line-height:16px}
+.sn{transition:transform .25s}
+.sn.up{transform:translate(-50%,calc(-50% - 21px))}
 .sn.has{color:var(--org)}
 .sn:focus-visible{outline:2px solid var(--org);outline-offset:2px;border-radius:4px}
 #fleet{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
@@ -167,7 +169,7 @@ const LAY=[I3,I2,I2,SD,SD,SD,TC,SD,SD,SD,SD,I3];
 const ICON=new Set([0,11]);          // 用 700T 小圖示意停靠的站：南港、左營
 const TERM_BEFORE=10, TERM_AFTER=10; // 假設值：起站發車前 10 分鐘進月台、終點站到達後 10 分鐘仍停在月台
 const COL=32;                        // 每條股道/月台的欄寬（月台間隔）；車次標籤寬 28，相鄰軌不會互相遮住
-const WW=390, CX=78+(WW-78)/2, MX=COL/2, ZT=28, ZB=28, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
+const WW=340, CX=WW/2, MX=COL/2, ZT=28, ZB=28, GAP=136; // 底圖寬、中心、主線偏移、上下留白、站間距(GAP 越大站間越長)
 const G=[]; let y0=ZT;
 LAY.forEach((p,i)=>{
   const W=p.length*COL, x0=CX-W/2, tk=[], pl=[];
@@ -307,7 +309,7 @@ function buildMap(){
     g.tk.forEach(k=>{b+=`<div class="tk${k.m?' m':''}" style="left:${k.x}px;top:${g.top}px;height:${g.H}px"></div>`});
     g.pl.forEach((q,j)=>{b+=`<div class="pl" id="pl-${i}-${j}" style="left:${q}px;top:${g.top+8}px;height:${g.H-16}px"></div>`});
     if(ICON.has(i))allTr(i).forEach(t=>{parkTotal++;b+=`<div class="park" id="pk-${i}-${Math.round(t.x)}" style="left:${t.x}px;top:${g.yc}px"><svg viewBox="0 0 60 46" aria-hidden="true"><use href="#t700"/></svg><span>整備中</span></div>`});
-    b+=`<button class="sn" data-i="${i}" style="top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}</button>`;
+    b+=`<button class="sn" data-i="${i}" style="left:${CX}px;top:${g.yc}px" aria-label="${ST[i][1]}站 未來兩小時車次">${ST[i][1]}</button>`;
   });
   b+='<div id="fleet"></div>';
   const m=$('#mapIn'); m.style.width=WW+'px'; m.style.height=MAPH+'px'; m.innerHTML=b;
@@ -382,6 +384,7 @@ function render(){
 
   document.querySelectorAll('.pl.hot').forEach(e=>e.classList.remove('hot'));
   document.querySelectorAll('.sn.has').forEach(e=>e.classList.remove('has'));
+  document.querySelectorAll('.sn.up').forEach(e=>e.classList.remove('up'));
   const names=document.querySelectorAll('.sn'), chips=['',''], seen=new Set(), byNo=(a,b)=>(parseInt(a.t.no,10)||0)-(parseInt(b.t.no,10)||0);
 
   function put(t,p,o){
@@ -428,6 +431,7 @@ function render(){
         return;
       }
       tx=allTr(i)[k].x;
+      if(Math.abs(tx-CX)<24)names[i].classList.add('up'); // 列車停在最靠中央的軌時，站名上移避免被車號框蓋住
       document.getElementById(`pl-${i}-${nearPl(i,tx)}`)?.classList.add('hot');
       put(t,p,{x:tx,y,icon,w});
       if(w&&icon&&p.k===0){ // 南港/左營起站：發車前 10 分鐘「整備中」轉為「即將發車」
